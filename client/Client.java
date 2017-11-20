@@ -17,8 +17,11 @@ class Client {
 	
 	private String users;
 	
-	public Client(SocketChannel sc) {
+	private String username;
+	
+	public Client(SocketChannel sc, String username) throws IOException {
 		this.sc = sc;
+		this.username = username;
 		
 		helpscreen = "Simply type a message you would like to send.\n"
 					+"Preface commands with \"~~ \", avalible commands are:\n"
@@ -29,10 +32,12 @@ class Client {
 					
 		buffer = ByteBuffer.allocate(4096);
 		
-		//check admin privileges
-		//	sends 1, admin privileges are allowed iff
-		//	a 1 is sent back as the response
-		buffer.putInt(1);
+		//first contact
+		//	sends the username
+		//	admin privileges are allowed iff a 1 sent back
+		//	a 0 indicates the connection was successful as a normal user
+		//	a -1 indicates that the username was already in use
+		buffer.put(username.getBytes());
 		buffer.flip();
 		sc.write(buffer);
 		
@@ -41,11 +46,17 @@ class Client {
 		int adminCode = buffer.getInt();
 		admin = (adminCode == 1);
 		
+		buffer.clear();
+		//end first contact
+		
 		sc.configureBlocking(false);
+		if(adminCode == -1) {
+			sc.close();
+		}
 	}
 	
 	//checks validity of messages before sending them to the server
-	public void process(String msg) {
+	public void process(String msg) throws IOException {
 		if(msg.equals("help")) { 				// Help screen
 			System.out.println(helpscreen);
 		} else {								// Communicate with server
@@ -76,17 +87,17 @@ class Client {
 		}
 	}
 	
-	private void send(String msg) {
+	private void send(String msg) throws IOException {
 		buffer.put(msg.getBytes());
 		buffer.flip();
 		sc.write(buffer);
 	}
 	
-	private String recieve() {
+	private String recieve() throws IOException {
 		int bytesRead = sc.read(buffer);
 		buffer.flip();
 		if(bytesRead > 0) {
-			return new String(buffer.toArray()).trim();
+			return new String(buffer.array()).trim();
 		}
 		return null;
 	}
@@ -95,14 +106,14 @@ class Client {
 		try {
 			Scanner kb = new Scanner(System.in);
 			SocketChannel sc = SocketChannel.open();
-			
+		
 			while(!sc.isConnected()) {
 				try {
 					System.out.print("Address? ");
 					String ip = kb.nextLine();
 					System.out.print("Port? ");
 					int port = Integer.parseInt(kb.nextLine());
-		
+	
 					sc.connect(new InetSocketAddress(ip, port));
 				} catch(NumberFormatException e) {
 					System.out.println("invalid port");
@@ -110,27 +121,31 @@ class Client {
 					System.out.println("invalid ip/port combination");
 				}
 			}
-		}
 		
-		Client c = new Client(sc);
-		String input;
+			System.out.print("Username? ");
+			String name = kb.nextLine();
 		
-		while(sc.isConnected()) {
-			if(kb.hasNext()) {
-				input = kb.nextLine();
-				System.out.print("> ");
-				c.process(input);
-			}
+			Client c = new Client(sc, name);
+			String input;
+		
+			while(sc.isConnected()) {
+				if(kb.hasNext()) {
+					input = kb.nextLine();
+					System.out.print("> ");
+					c.process(input);
+				}
 			
-			String recieved = c.recieve();
-			if(recieved != null) {
-				System.out.println(recieved);
-				System.out.print("> ");
-			}
+				String recieved = c.recieve();
+				if(recieved != null) {
+					System.out.println(recieved);
+					System.out.print("> ");
+				}
 			
+			}
+		
+			kb.close();
+		} catch(IOException e) {
+			e.printStackTrace();
 		}
-		
-		kb.close();
-		
 	}
 }
