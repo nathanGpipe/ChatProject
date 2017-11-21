@@ -32,6 +32,7 @@ class Client {
 					
 		buffer = ByteBuffer.allocate(4096);
 		
+		sc.configureBlocking(true);
 		//first contact
 		//	sends the username
 		//	admin privileges are allowed iff a 1 sent back
@@ -40,6 +41,8 @@ class Client {
 		buffer.put(username.getBytes());
 		buffer.flip();
 		sc.write(buffer);
+		
+		buffer.clear();
 		
 		sc.read(buffer);
 		buffer.flip();
@@ -51,6 +54,7 @@ class Client {
 		
 		sc.configureBlocking(false);
 		if(adminCode == -1) {
+			System.out.println("Invalid username");
 			sc.close();
 		}
 	}
@@ -61,9 +65,9 @@ class Client {
 			System.out.println(helpscreen);
 		} else {								// Communicate with server
 			String[] words = msg.split(" ");
-			if(words[0].equals("~~") && admin) {// Command processing
+			if(words[0].equals("~~")) {// Command processing
 				//kick
-				if(words.length == 3 && words[1].equals("kick")) {
+				if(words.length == 3 && words[1].equals("kick") && admin) {
 					send(msg);
 				//list
 				} else if(words.length == 2 && words[1].equals("list")) {
@@ -91,14 +95,17 @@ class Client {
 		buffer.put(msg.getBytes());
 		buffer.flip();
 		sc.write(buffer);
+		buffer.clear();
 	}
 	
 	private String recieve() throws IOException {
 		int bytesRead = sc.read(buffer);
 		buffer.flip();
 		if(bytesRead > 0) {
+			buffer.clear();
 			return new String(buffer.array()).trim();
 		}
+		buffer.clear();
 		return null;
 	}
 	
@@ -127,22 +134,27 @@ class Client {
 		
 			Client c = new Client(sc, name);
 			String input;
-		
+			
+			System.out.print("> ");
 			while(sc.isConnected()) {
+				input = "";
 				if(kb.hasNext()) {
 					input = kb.nextLine();
 					System.out.print("> ");
 					c.process(input);
 				}
-			
-				String recieved = c.recieve();
+				String recieved = null;
+				if(!input.equals("~~ exit")) {
+					recieved = c.recieve();
+				}
 				if(recieved != null) {
 					System.out.println(recieved);
 					System.out.print("> ");
 				}
 			
 			}
-		
+			
+			System.out.println("Connection closed");
 			kb.close();
 		} catch(IOException e) {
 			e.printStackTrace();
