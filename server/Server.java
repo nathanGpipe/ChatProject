@@ -49,7 +49,7 @@ class Server {
 				t.start();
 			}
 		} catch(IOException e) {
-			System.out.println("Exception found");
+			System.out.println("Exception found: " + e);
 		}
 	}
 
@@ -57,13 +57,13 @@ class Server {
 
 class TcpServerThread extends Thread {
 
-	SocketChannel sc;
+	private SocketChannel sc;
 
-	ConcurrentHashMap<String, CopyOnWriteArrayList<String>> users;
+	private ConcurrentHashMap<String, CopyOnWriteArrayList<String>> users;
 	
-	ByteBuffer buffer;
+	private ByteBuffer buffer;
 	
-	String username;
+	private String username;
 
 	public TcpServerThread(SocketChannel s, ConcurrentHashMap<String, CopyOnWriteArrayList<String>> u) throws IOException {
 		sc = s;
@@ -102,13 +102,11 @@ class TcpServerThread extends Thread {
 		try{
 			String msg = "";
 			String out = "";
+			int messageCount = 0;
 		   	
 			while(sc.isConnected()) {
 				if(users.containsKey(username)) {
-					buffer = ByteBuffer.allocate(4096);
-					sc.read(buffer);
-					buffer.flip();
-					msg = new String(buffer.array()).trim();
+					msg = recieve();
 					System.out.println(msg);
 				
 				
@@ -126,17 +124,22 @@ class TcpServerThread extends Thread {
 								System.out.println(users);
 							}
 							//sc.configureBlocking(false);
+						//exit
+						} else if(words.length == 2 && words[1].equals("exit")) {
+							sc.close();
+							users.remove(username);
 						//whisper
 						} else if(words.length > 2 && words[1].equals("whisper")) {
 							users.get(words[2]).add(username + " " + msg.substring(8+words[2].length()));
 						}
 					} else {
-						users.get("~all").add(username + " ");
+						users.get("~all").add(username + ": " + msg);
 					}
 					
 					msg = "";
 				} else {
 					System.out.println("Client " + username + " kicked");
+					send("~~ * kicked");
 					sc.close();
 				}
 			}
@@ -151,12 +154,14 @@ class TcpServerThread extends Thread {
 	}
 	
 	private void send(String msg) throws IOException {
+		buffer = ByteBuffer.allocate(4096);
 		buffer.put(msg.getBytes());
 		buffer.flip();
 		sc.write(buffer);
 	}
 	
 	private String recieve() throws IOException {
+		buffer = ByteBuffer.allocate(4096);
 		int bytesRead = sc.read(buffer);
 		buffer.flip();
 		if(bytesRead > 0) {

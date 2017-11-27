@@ -48,6 +48,9 @@ class Client {
 		buffer.flip();
 		int adminCode = buffer.getInt();
 		admin = (adminCode == 1);
+		if(admin) {
+			System.out.println("--- Administrative privlages enabled ---");
+		}
 		
 		buffer.clear();
 		//end first contact
@@ -80,6 +83,7 @@ class Client {
 					sc.configureBlocking(false);
 				//exit
 				} else if(words.length == 2 && words[1].equals("exit")) {
+					send(msg);
 					sc.close();
 				//whisper
 				} else if(words.length > 2 && words[1].equals("whisper")) {
@@ -91,19 +95,24 @@ class Client {
 		}
 	}
 	
+	//send string
 	private void send(String msg) throws IOException {
+		buffer = ByteBuffer.allocate(4096);
 		buffer.put(msg.getBytes());
 		buffer.flip();
 		sc.write(buffer);
 		buffer.clear();
 	}
 	
+	//recieve string
 	private String recieve() throws IOException {
+		buffer = ByteBuffer.allocate(4096);
 		int bytesRead = sc.read(buffer);
 		buffer.flip();
 		if(bytesRead > 0) {
+			String temp = new String(buffer.array()).trim();
 			buffer.clear();
-			return new String(buffer.array()).trim();
+			return temp;
 		}
 		buffer.clear();
 		return null;
@@ -148,8 +157,13 @@ class Client {
 					recieved = c.recieve();
 				}
 				if(recieved != null) {
-					System.out.println(recieved);
-					System.out.print("> ");
+					if(recieved.equals("~~ * kicked")) {
+						System.out.println("--- Kicked by administrator ---");
+						sc.close();
+					} else {
+						System.out.println(recieved);
+						System.out.print("> ");
+					}
 				}
 			
 			}
