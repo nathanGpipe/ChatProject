@@ -74,13 +74,8 @@ class Client {
 					send(msg);
 				//list
 				} else if(words.length == 2 && words[1].equals("list")) {
-					sc.configureBlocking(true);
 					send(msg);
-					users = recieve();
-					if(users != null) {
-						System.out.println(users);
-					}
-					sc.configureBlocking(false);
+					
 				//exit
 				} else if(words.length == 2 && words[1].equals("exit")) {
 					send(msg);
@@ -104,6 +99,60 @@ class Client {
 		buffer.clear();
 	}
 	
+	public static void main(String[] args){
+		try {
+			Console kb = System.console();
+			SocketChannel sc = SocketChannel.open();
+		
+			while(!sc.isConnected()) {
+				try {
+					System.out.print("Address? ");
+					String ip = kb.readLine();
+					System.out.print("Port? ");
+					int port = Integer.parseInt(kb.readLine());
+	
+					sc.connect(new InetSocketAddress(ip, port));
+				} catch(NumberFormatException e) {
+					System.out.println("invalid port");
+				} catch(Exception e) {
+					System.out.println("invalid ip/port combination");
+				}
+			}
+		
+			System.out.print("Username? ");
+			String name = kb.readLine();
+		
+			Client c = new Client(sc, name);
+			String input;
+			
+			ListenThread listener = new ListenThread(sc);
+			listener.start();
+			
+			System.out.print("> ");
+			while(sc.isConnected()) {
+				input = "";
+				
+				input = kb.readLine();
+				if(input != null) {
+					System.out.print("> ");
+					c.process(input);
+				}
+			}
+			
+			System.out.println("Connection closed");
+		} catch(IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+}
+
+class ListenThread extends Thread {
+	
+	private SocketChannel sc;
+	
+	private ByteBuffer buffer;
+	
 	//recieve string
 	private String recieve() throws IOException {
 		buffer = ByteBuffer.allocate(4096);
@@ -118,44 +167,15 @@ class Client {
 		return null;
 	}
 	
-	public static void main(String[] args){
-		try {
-			Scanner kb = new Scanner(System.in);
-			SocketChannel sc = SocketChannel.open();
-		
-			while(!sc.isConnected()) {
-				try {
-					System.out.print("Address? ");
-					String ip = kb.nextLine();
-					System.out.print("Port? ");
-					int port = Integer.parseInt(kb.nextLine());
+	public ListenThread(SocketChannel s) {
+		sc = s;
+		buffer = ByteBuffer.allocate(4096);
+	}
 	
-					sc.connect(new InetSocketAddress(ip, port));
-				} catch(NumberFormatException e) {
-					System.out.println("invalid port");
-				} catch(Exception e) {
-					System.out.println("invalid ip/port combination");
-				}
-			}
-		
-			System.out.print("Username? ");
-			String name = kb.nextLine();
-		
-			Client c = new Client(sc, name);
-			String input;
-			
-			System.out.print("> ");
+	public void run() {
+		try {
 			while(sc.isConnected()) {
-				input = "";
-				if(kb.hasNext()) {
-					input = kb.nextLine();
-					System.out.print("> ");
-					c.process(input);
-				}
-				String recieved = null;
-				if(!input.equals("~~ exit")) {
-					recieved = c.recieve();
-				}
+				String recieved = recieve();
 				if(recieved != null) {
 					if(recieved.equals("~~ * kicked")) {
 						System.out.println("--- Kicked by administrator ---");
@@ -165,13 +185,10 @@ class Client {
 						System.out.print("> ");
 					}
 				}
-			
 			}
-			
-			System.out.println("Connection closed");
-			kb.close();
-		} catch(IOException e) {
-			e.printStackTrace();
+		} catch (IOException e) {
+			System.out.println("Exception found: " + e);
 		}
 	}
+	
 }

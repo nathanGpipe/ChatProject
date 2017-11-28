@@ -94,7 +94,7 @@ class TcpServerThread extends Thread {
 		buffer.clear();
 		//end first contact
 		
-		//sc.configureBlocking(true);
+		sc.configureBlocking(false);
 	}
 
 	public void run(){
@@ -102,47 +102,61 @@ class TcpServerThread extends Thread {
 		try{
 			String msg = "";
 			String out = "";
-			int messageCount = 0;
+			int messageCount = users.get("~all").size();
 		   	
 			while(sc.isConnected()) {
 				if(users.containsKey(username)) {
 					msg = recieve();
-					System.out.println(msg);
+					if(msg != null) {
+						System.out.println(msg);
 				
 				
-					String[] words = msg.split(" ");
-					if(words[0].equals("~~")) {// Command processing
-						//kick
-						if(words.length == 3 && words[1].equals("kick") && username.equals("admin")) {
-							if(users.containsKey(words[2])) {
-								users.remove(words[2]);
+						String[] words = msg.split(" ");
+						if(words[0].equals("~~")) {// Command processing
+							//kick
+							if(words.length == 3 && words[1].equals("kick") && username.equals("admin")) {
+								if(users.containsKey(words[2])) {
+									users.remove(words[2]);
+								}
+							//list
+							} else if(words.length == 2 && words[1].equals("list")) {
+								send(users.keySet().toString());
+								if(users != null) {
+									System.out.println(users);
+								}
+								//sc.configureBlocking(false);
+							//exit
+							} else if(words.length == 2 && words[1].equals("exit")) {
+								sc.close();
+								users.remove(username);
+							//whisper
+							} else if(words.length > 2 && words[1].equals("whisper")) {
+								users.get(words[2]).add(username + " " + msg.substring(8+words[2].length()));
 							}
-						//list
-						} else if(words.length == 2 && words[1].equals("list")) {
-							send(msg);
-							if(users != null) {
-								System.out.println(users);
-							}
-							//sc.configureBlocking(false);
-						//exit
-						} else if(words.length == 2 && words[1].equals("exit")) {
-							sc.close();
-							users.remove(username);
-						//whisper
-						} else if(words.length > 2 && words[1].equals("whisper")) {
-							users.get(words[2]).add(username + " " + msg.substring(8+words[2].length()));
+						} else {
+							users.get("~all").add(username + ": " + msg);
+							messageCount++;
 						}
-					} else {
-						users.get("~all").add(username + ": " + msg);
-					}
 					
-					msg = "";
+						msg = "";
+					} else {
+						int tmp = users.get("~all").size();
+						if(tmp > messageCount) {
+							for(int i = messageCount; i < tmp; i++) {
+								send(users.get("~all").get(i) + "\n");
+							}
+							messageCount = tmp;
+						}
+					}
 				} else {
 					System.out.println("Client " + username + " kicked");
 					send("~~ * kicked");
 					sc.close();
 				}
 			}
+			
+			System.out.println("Connection closed");
+			
 		} catch(IOException e) {
 			System.out.println("Got an exception.");
 		} finally {
