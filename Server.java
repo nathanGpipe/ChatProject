@@ -87,27 +87,36 @@ class TcpServerThread extends Thread {
 		
 		buffer = ByteBuffer.allocate(4096);
 		
-		//first contact
 		sc.configureBlocking(true);
+		//first contact
 		
 			//RSA
 		sc.read(buffer);
 		buffer.flip();
 		
-		byte[] keyBytes = new byte[256];
-		buffer.get(keyBytes, 0, 256);
-		keyBytes = crypt.RSADecrypt(keyBytes);
+		byte[] encrypted_keyBytes = new byte[buffer.remaining()];
+		buffer.get(encrypted_keyBytes);
+		byte[] keyBytes = crypt.RSADecrypt(encrypted_keyBytes);
 		
 		secKey = new SecretKeySpec(keyBytes, "AES");
 		
+		buffer.clear();
+		buffer.putInt(1);
+		buffer.flip();
+		sc.write(buffer);
+		buffer.clear();
+		
 			//AES
-		byte[] ivbytes = new byte[16];
-		buffer.get(ivbytes, 0, 16);
-		ivbytes = crypt.RSADecrypt(ivbytes);
-		for(byte b : ivbytes) {
-			System.out.print("" + b + " ");
-		}
-		System.out.println("");
+		sc.read(buffer);
+		buffer.flip();
+		
+		byte[] encrypted_ivbytes = new byte[buffer.remaining()];
+		buffer.get(encrypted_ivbytes);
+		byte[] ivbytes = crypt.RSADecrypt(encrypted_ivbytes);
+		//for(byte b : ivbytes) {
+		//	System.out.print("" + b + " ");
+		//}
+		//System.out.println("");
 		
 		iv = new IvParameterSpec(ivbytes);
 		buffer.clear();
@@ -133,8 +142,8 @@ class TcpServerThread extends Thread {
 		
 		buffer.clear();
 		//end first contact
-		
 		sc.configureBlocking(false);
+		
 	}
 
 	public void run(){
@@ -149,7 +158,7 @@ class TcpServerThread extends Thread {
 				if(users.containsKey(username)) {
 					msg = recieve();
 					if(msg != null) {
-						System.out.println(msg);
+						System.out.println(username + ": " + msg);
 				
 				
 						String[] words = msg.split(" ");
@@ -161,7 +170,14 @@ class TcpServerThread extends Thread {
 								}
 							//list
 							} else if(words.length == 2 && words[1].equals("list")) {
-								send(users.keySet().toString());
+								String userlist = "Connected users: ";
+								for(String s : users.keySet()) {
+									if(!(s.equals("~all"))) {
+										userlist += "\n" + s;
+									}
+								}
+								
+								send(userlist);
 								if(users != null) {
 									System.out.println(users);
 								}
@@ -172,13 +188,13 @@ class TcpServerThread extends Thread {
 							//whisper
 							} else if(words.length > 2 && words[1].equals("whisper")) {
 								String key = "";
-								System.out.println(username + " whispered to '" + words[2] + "'");
+								System.out.println(username + " whispered to " + words[2]);
 								for(String k : users.keySet()) {
 									if(k.equals(words[2])) {
 										try {
 											users.get(words[2]).add("** " + username + ": " + msg.substring(11+words[2].length()));
 										} catch (Exception e) {
-									
+											
 										}
 										
 									}
@@ -191,16 +207,18 @@ class TcpServerThread extends Thread {
 						}
 					
 						msg = "";
-					} else if(users.contains(username)){
+					} else if(users.containsKey(username)){
 						int tmpAll = users.get("~all").size();
 						int tmpWhisper = users.get(username).size();
 						
 						if(tmpAll > messageCount) {
+							System.out.println(username + ": updating messages");
 							for(int i = messageCount; i < tmpAll; i++) {
 								send(users.get("~all").get(i) + "\n");
 							}
 							messageCount = tmpAll;
 						} else if(tmpWhisper > whisperCount) {
+							System.out.println(username + ": updating whispers");
 							for(int i = whisperCount; i < tmpWhisper; i++) {
 								send(users.get(username).get(i) + "\n");
 							}
@@ -208,7 +226,7 @@ class TcpServerThread extends Thread {
 						}
 					}
 				} else {
-					System.out.println("Client " + username + " kicked");
+					System.out.println("Client " + username + " was kicked");
 					send("~~ * kicked");
 					sc.close();
 				}
@@ -229,17 +247,23 @@ class TcpServerThread extends Thread {
 	private void send(String msg) throws IOException {
 		buffer = ByteBuffer.allocate(4096);
 		byte[] msgBytes = crypt.encrypt(msg.getBytes(), secKey, iv);
-		buffer.put(msg.getBytes());
+		buffer.put(msgBytes);
 		buffer.flip();
 		sc.write(buffer);
+		buffer.clear();
 	}
 	
 	private String recieve() throws IOException {
 		buffer = ByteBuffer.allocate(4096);
 		int bytesRead = sc.read(buffer);
-		buffer.flip();
+		
+		//System.out.println("recieved " + buffer.remaining() + " bits");
 		if(bytesRead > 0) {
-			byte[] msgBytes = crypt.decrypt(buffer.array(), secKey, iv);
+			buffer.flip();
+			byte[] encrypted_msgBytes = new byte[buffer.remaining()];
+			buffer.get(encrypted_msgBytes);
+			byte[] msgBytes = crypt.decrypt(encrypted_msgBytes, secKey, iv);
+			buffer.clear();
 			return new String(msgBytes).trim();
 		}
 		return null;

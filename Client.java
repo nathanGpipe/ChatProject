@@ -36,7 +36,6 @@ class Client {
 		crypt = new cryptotest();
 		crypt.setPublicKey("RSApub.der");
 		secKey = crypt.generateAESKey();
-		System.out.println(secKey);
 		
 		SecureRandom r = new SecureRandom();
 		byte ivbytes[] = new byte[16];
@@ -62,23 +61,24 @@ class Client {
 		
 			//RSA
 		buffer.put(crypt.RSAEncrypt(secKey.getEncoded()));
+		buffer.flip();
+		sc.write(buffer);
+		buffer.clear();
 		
+		sc.read(buffer);
+		buffer.clear();
 			//AES
-		for(byte b : ivbytes) {
-			System.out.print("" + b + " ");
-		}
-		System.out.println("");
+		//for(byte b : ivbytes) {
+		//	System.out.print("" + b + " ");
+		//}
+		//System.out.println("");
 		buffer.put(crypt.RSAEncrypt(ivbytes));
 		buffer.flip();
 		sc.write(buffer);
 		buffer.clear();
 		
 			//username
-		buffer.put(username.getBytes());
-		buffer.flip();
-		sc.write(buffer);
-		
-		buffer.clear();
+		send(username);
 		
 		sc.read(buffer);
 		buffer.flip();
@@ -130,9 +130,11 @@ class Client {
 	private void send(String msg) throws IOException {
 		buffer = ByteBuffer.allocate(4096);
 		byte[] msgBytes = crypt.encrypt(msg.getBytes(), secKey, iv);
-		buffer.put(msg.getBytes());
+		buffer.put(msgBytes);
 		buffer.flip();
+		//System.out.println("sent " + buffer.remaining() + " bits");
 		sc.write(buffer);
+		buffer.clear();
 	}
 	
 	public static void main(String[] args){
@@ -165,6 +167,7 @@ class Client {
 			listener.start();
 			
 			System.out.print("> ");
+			c.process("~~ list");
 			while(sc.isConnected()) {
 				input = "";
 				
@@ -201,14 +204,14 @@ class ListenThread extends Thread {
 	private String recieve() throws IOException {
 		buffer = ByteBuffer.allocate(4096);
 		int bytesRead = sc.read(buffer);
-		buffer.flip();
 		if(bytesRead > 0) {
-			byte[] msgBytes = crypt.decrypt(buffer.array(), secKey, iv);
-			String temp = new String(msgBytes).trim();
+			buffer.flip();
+			byte[] encrypted_msgBytes = new byte[buffer.remaining()];
+			buffer.get(encrypted_msgBytes);
+			byte[] msgBytes = crypt.decrypt(encrypted_msgBytes, secKey, iv);
 			buffer.clear();
-			return temp;
+			return new String(msgBytes).trim();
 		}
-		buffer.clear();
 		return null;
 	}
 	
@@ -226,16 +229,16 @@ class ListenThread extends Thread {
 				String recieved = recieve();
 				if(recieved != null) {
 					if(recieved.equals("~~ * kicked")) {
-						System.out.println("--- Kicked by administrator ---");
+						System.out.print("--- Kicked by administrator ---\nPress Enter to close\n> ");
 						sc.close();
 					} else {
 						System.out.println(recieved);
 						System.out.print("> ");
 					}
 				}
-			}
+			}	
 		} catch (IOException e) {
-			System.out.println("Exception found: " + e);
+			//System.out.println("Exception found: " + e);
 		}
 	}
 	
